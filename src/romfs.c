@@ -7,6 +7,7 @@
 #include "romfs.h"
 #include "osdebug.h"
 #include "hash-djb2.h"
+#include "clib.h"
 
 struct romfs_fds_t {
     const uint8_t * file;
@@ -65,19 +66,80 @@ static off_t romfs_seek(void * opaque, off_t offset, int whence) {
     return offset;
 }
 
-const uint8_t * romfs_get_file_by_hash(const uint8_t * romfs, uint32_t h, uint32_t * len) {
-    const uint8_t * meta;
+const uint8_t * romfs_get_file_by_hash(const uint8_t * romfs, uint32_t h, uint32_t * len) 
+{
+	const uint8_t * meta = romfs;
+	uint32_t hash, offset = 0;
 
-    for (meta = romfs; get_unaligned(meta) && get_unaligned(meta + 4); meta += get_unaligned(meta + 4) + 8) {
-        if (get_unaligned(meta) == h) {
-            if (len) {
-                *len = get_unaligned(meta + 4);
-            }
-            return meta + 8;
-        }
+	while ((hash = get_unaligned(meta + offset))) {
+		offset += 4;
+
+		/*
+		 * Skip the file name meta data (length + file name).
+		 * meta[offset] is the length of the file name, and 
+		 * the number "1" is the length field of the file name.
+		 */
+		offset += (1 + meta[offset]);
+
+		if (hash == h) {
+	    		if (len)
+               			*len = get_unaligned(meta + offset);
+            		return meta + offset + 4;
+		}
+
+		offset += get_unaligned(meta + offset) + 4;
+    	}
+    
+	return NULL;
+}
+
+int romfs_ls(void *opaque)
+{
+    	int len, console_col_len = 0;
+	uint8_t *meta = (uint8_t *) opaque;
+    	uint8_t buf[256];
+
+    	if (!meta)
+		return -1;
+
+	memset(buf, 0, sizeof(buf));
+    
+	fio_printf(1, "\r\n");
+
+   	while (get_unaligned(meta)) {
+		/* Move to the next field: the length of the file name. */
+		meta += 4;
+
+		/* Get the length of the file name. */
+		len = meta[0];
+
+		/* Move to to the next field: the file name. */
+		meta++;
+
+		memcpy(buf, meta, len);
+		buf[len] = '\0';
+
+		if (CONSOLE_EXCEED_COL_SIZE(console_col_len + len)) {
+			console_col_len = 0;
+			fio_printf(1, "\r\n");
+		}
+
+		fio_printf(1, "%s  ", buf);
+
+		console_col_len += len;
+
+		/*
+		 * Move to the next field: the length of the content of the
+		 * file.
+		 */
+		meta += len;
+
+		/* Move to the next field: the content of the file. */
+		meta += get_unaligned(meta) + 4;
     }
 
-    return NULL;
+    fio_printf(1, "\r\n");
+    return 0;
 }
 
 static int romfs_open(void * opaque, const char * path, int flags, int mode) {
@@ -101,5 +163,5 @@ static int romfs_open(void * opaque, const char * path, int flags, int mode) {
 
 void register_romfs(const char * mountpoint, const uint8_t * romfs) {
 //    DBGOUT("Registering romfs `%s' @ %p\r\n", mountpoint, romfs);
-    register_fs(mountpoint, romfs_open, (void *) romfs);
+    register_fs(mountpoint, romfs_open, romfs_ls, (void *) romfs);
 }

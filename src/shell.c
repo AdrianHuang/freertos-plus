@@ -59,8 +59,10 @@ int parse_command(char *str, char *argv[]){
 	return count;
 }
 
-void ls_command(int n, char *argv[]){
-
+void ls_command(int n, char *argv[]) 
+{
+	if (fs_ls())
+		fio_printf(2, "\r\nNo file system\r\n");
 }
 
 int filedump(const char *filename){
@@ -79,6 +81,9 @@ int filedump(const char *filename){
 	}
 
 	fio_close(fd);
+
+	fio_printf(1, "\r");
+
 	return 1;
 }
 
