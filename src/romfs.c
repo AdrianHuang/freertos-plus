@@ -97,7 +97,7 @@ const uint8_t * romfs_get_file_by_hash(const uint8_t * romfs, uint32_t h, uint32
 	return NULL;
 }
 
-int romfs_ls(void *opaque)
+static int romfs_ls(void *opaque)
 {
     	int len, console_col_len = 0;
 	uint8_t *meta = (uint8_t *) opaque;
