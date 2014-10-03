@@ -224,7 +224,11 @@ static int devfs_open(void * opaque, const char * path, int flags, int mode) {
     return -1;
 }
 
+static struct file_operations devfs_fops = {
+	.open = devfs_open
+};
+
 void register_devfs() {
     DBGOUT("Registering devfs.\r\n");
-    register_fs("dev", devfs_open, NULL, NULL);
+    register_fs("dev", &devfs_fops, NULL);
 }

@@ -9,17 +9,16 @@
 #define MAX_FS 16
 
 struct fs_t {
-    uint32_t hash;
-    fs_open_t cb;
-    fs_ls_t ls_cb;
-    void * opaque;
+	uint32_t hash;
+	void * opaque;
+	struct file_operations *fops;
 };
 
 static struct fs_t fss[MAX_FS];
 
 __attribute__((constructor)) void fs_init()
 {
-    memset(fss, 0, sizeof(fss));
+	memset(fss, 0, sizeof(fss));
 }
 
 static struct fs_t *fs_get_fss(const char *str)
@@ -29,7 +28,7 @@ static struct fs_t *fs_get_fss(const char *str)
 
 	hash = hash_djb2((const uint8_t *) str, -1);
 
-	for (i=0;i<MAX_FS && fss[i].cb;i++) {
+	for (i=0;i<MAX_FS && fss[i].fops;i++) {
 		if (fss[i].hash == hash)
 			return &fss[i];
 	}
@@ -37,58 +36,63 @@ static struct fs_t *fs_get_fss(const char *str)
 	return NULL;
 }
 
-int fs_ls(void)
+int fs_show_files(void)
 {
 	struct fs_t *fs_ptr = fs_get_fss("romfs");
 		
-	if (!fs_ptr || !fs_ptr->ls_cb)
+	if (!fs_ptr || !fs_ptr->fops || !fs_ptr->fops->show_files)
 		return -1;
 
-	fs_ptr->ls_cb(fs_ptr->opaque);
+	fs_ptr->fops->show_files(fs_ptr->opaque);
 
 	return 0;
 }
 
-int register_fs(const char * mountpoint, fs_open_t callback, fs_ls_t ls_cb, void * opaque) 
+int register_fs(const char * mountpoint, struct file_operations *fops,
+		void * opaque)
 {
-    int i;
-    DBGOUT("register_fs(\"%s\", %p, %p)\r\n", mountpoint, callback, opaque);
-    
-    for (i = 0; i < MAX_FS; i++) {
-        if (!fss[i].cb) {
-            fss[i].hash = hash_djb2((const uint8_t *) mountpoint, -1);
-            fss[i].cb = callback;
-            fss[i].ls_cb = ls_cb;
-            fss[i].opaque = opaque;
-            return 0;
+	int i;
+	DBGOUT("register_fs(\"%s\", %p, %p)\r\n", mountpoint, fops, opaque);
+
+	for (i = 0; i < MAX_FS; i++) {
+		if (fss[i].fops)
+			continue;
+
+		fss[i].hash = hash_djb2((const uint8_t *) mountpoint, -1);
+		fss[i].fops = fops;
+		fss[i].opaque = opaque;
+
+		return 0;
         }
-    }
-    
-    return -1;
+
+	return -1;
 }
 
 int fs_open(const char * path, int flags, int mode)
 {
-    const char * slash;
-    uint32_t hash;
-    int i;
-//    DBGOUT("fs_open(\"%s\", %i, %i)\r\n", path, flags, mode);
-    
-    while (path[0] == '/')
-        path++;
-    
-    slash = strchr(path, '/');
-    
-    if (!slash)
-        return -2;
+	const char * slash;
+	uint32_t hash;
+	int i;
 
-    hash = hash_djb2((const uint8_t *) path, slash - path);
-    path = slash + 1;
+	//DBGOUT("fs_open(\"%s\", %i, %i)\r\n", path, flags, mode);
 
-    for (i = 0; i < MAX_FS; i++) {
-        if (fss[i].hash == hash)
-            return fss[i].cb(fss[i].opaque, path, flags, mode);
-    }
-    
-    return -2;
+	while (path[0] == '/')
+		path++;
+
+	slash = strchr(path, '/');
+
+	if (!slash)
+		return -2;
+
+	hash = hash_djb2((const uint8_t *) path, slash - path);
+	path = slash + 1;
+
+	for (i = 0; i < MAX_FS; i++) {
+		if (fss[i].hash != hash)
+			continue;
+
+		return fss[i].fops->open(fss[i].opaque, path, flags, mode);
+	}
+
+	return -2;
 }

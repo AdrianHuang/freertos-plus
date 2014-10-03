@@ -7,14 +7,18 @@
 #define MAX_FS 16
 #define OPENFAIL (-1)
 
-typedef int (*fs_open_t) (void * opaque, const char * fname, int flags, int mode);
-typedef int (*fs_ls_t) (void * opaque);
+struct file_operations {
+	int (*open) (void *, const char *, int,	int);
+	int (*show_files) (void *);
+};
 
 /* Need to be called before using any other fs functions */
 __attribute__((constructor)) void fs_init();
 
-int register_fs(const char * mountpoint, fs_open_t callback, fs_ls_t ls_cb, void * opaque);
+int register_fs(const char * mountpoint, struct file_operations *fops,
+		void * opaque);
+
 int fs_open(const char * path, int flags, int mode);
-int fs_ls(void);
+int fs_show_files(void);
 
 #endif

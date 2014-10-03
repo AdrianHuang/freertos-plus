@@ -61,7 +61,7 @@ int parse_command(char *str, char *argv[]){
 
 void ls_command(int n, char *argv[]) 
 {
-	if (fs_ls())
+	if (fs_show_files())
 		fio_printf(2, "\r\nNo file system\r\n");
 }
 
