@@ -81,15 +81,19 @@ const uint8_t * romfs_get_file_by_hash(const uint8_t * romfs, uint32_t h, uint32
 		 */
 		offset += (1 + meta[offset]);
 
-		if (hash == h) {
-	    		if (len)
-               			*len = get_unaligned(meta + offset);
-            		return meta + offset + 4;
+		if (hash != h) {
+			/* Move to the next block of a file. */
+			offset += get_unaligned(meta + offset) + 4;
+			continue;
 		}
 
-		offset += get_unaligned(meta + offset) + 4;
-    	}
-    
+		if (len)
+			*len = get_unaligned(meta + offset);
+
+		/* Return the starting address of the content. */
+		return meta + offset + 4;
+	}
+
 	return NULL;
 }
 
@@ -136,10 +140,10 @@ int romfs_ls(void *opaque)
 
 		/* Move to the next field: the content of the file. */
 		meta += get_unaligned(meta) + 4;
-    }
+	}
 
-    fio_printf(1, "\r\n");
-    return 0;
+	fio_printf(1, "\r\n");
+	return 0;
 }
 
 static int romfs_open(void * opaque, const char * path, int flags, int mode) {
